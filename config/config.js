@@ -27,7 +27,7 @@ var config = {
       name: 'backend'
     },
     port: 3000,
-    db: 'postgres://localhost/nomad'
+    db: process.env.DATABASE_URL
   }
 };
 
