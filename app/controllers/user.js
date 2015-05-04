@@ -1,10 +1,69 @@
 var express = require('express'),
   router = express.Router(),
-  db = require('../models');
+  db = require('../models'),
+  _ = require('underscore');
 
 module.exports = function (app) {
   app.use('/user', router);
 };
+
+router.get('/:id', function(req, res){
+  db.User.find(req.params.id).then(function(user){
+
+    if(!user){
+      var errorMessage = 'User not found.';
+      console.error(errorMessage);
+      res.statusCode = 401;
+      res.end(JSON.stringify({
+        message: errorMessage
+      }));
+      return;
+    }
+
+    var userData = user.get({
+      plain: true
+    });
+
+    res.end(JSON.stringify(userData));
+  }, function(error){
+
+    console.error(error.message);
+    res.statusCode = 500;
+    res.end(JSON.stringify({
+      message: 'Unable to get user. Please try again later.'
+    }));
+
+  });
+});
+
+router.put('/:id', function(req, res){
+  console.log(req.body)
+  db.User.update(
+    { bio: req.body.bio },
+    { where: { id: req.body.id} }
+  ).then(function(data){
+
+    db.User.find(req.body.id).then(function(user){
+      var userData = user.get({
+        plain: true
+      });
+
+      res.end(JSON.stringify(userData));
+
+    }, function(error){
+      console.error(error.message);
+      // User updated succesfully. Send the original request body back
+      res.end(JSON.stringify(req.body));
+    });
+
+  }, function(error){
+    console.error(error.message);
+    res.statusCode = 500;
+    res.end(JSON.stringify({
+      message: error.message
+    }));
+  });
+});
 
 router.post('/:id/interest', function (req, res, next) {
 

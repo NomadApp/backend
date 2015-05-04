@@ -52,6 +52,15 @@ module.exports = function (sequelize, DataTypes) {
     facebookAccessToken: {
       type: DataTypes.STRING,
       allowNull: false
+    },
+    bio: {
+      type: DataTypes.STRING,
+      validate: {
+        max: {
+          args: 250,
+          msg: 'Bio cannot be greater than 250 characters'
+        }
+      }
     }
   }, {
     classMethods: {
