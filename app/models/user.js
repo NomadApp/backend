@@ -67,6 +67,8 @@ module.exports = function (sequelize, DataTypes) {
       associate: function (models) {
         User.hasMany(models.Interest, {as: 'Interests'});
         User.hasMany(models.Like, {as: 'Likes'});
+        User.belongsToMany(models.Trip, {through: 'TripUser'});
+        User.hasMany(models.FacebookUser, {as: 'FacebookFriends'})
       }
     }
   });

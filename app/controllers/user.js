@@ -1,3 +1,4 @@
+/// <reference path="../../../typings/node/node.d.ts"/>
 var express = require('express'),
   router = express.Router(),
   db = require('../models'),
@@ -37,7 +38,6 @@ router.get('/:id', function(req, res){
 });
 
 router.put('/:id', function(req, res){
-  console.log(req.body)
   db.User.update(
     { bio: req.body.bio },
     { where: { id: req.body.id} }
@@ -161,4 +161,99 @@ router.post('/:id/like', function (req, res, next) {
     }));
 
   });
+});
+
+router.get('/:id/trip', function (req, res, next) {
+
+  db.User
+    .build({id: req.params.id})
+    .getTrips()
+    .then(function(trips){
+
+      res.end(JSON.stringify(trips));
+
+  }, function(error){
+
+    console.error(error.message);
+    res.statusCode = 500;
+    res.end(JSON.stringify({
+      message: 'Unable to get user trips. Please try again later.'
+    }));
+
+  });
+});
+
+router.get('/:id/friend', function (req, res, next) {
+
+  db.User
+    .build({id: req.params.id})
+    .getFacebookFriends({where: "(\"FacebookUser\".\"firstName\" like '"+req.query.term+"%' or \"FacebookUser\".\"lastName\" like '"+req.query.term+"%')"})
+    .then(function(friends){
+
+      res.end(JSON.stringify(friends));
+
+  }, function(error){
+
+    console.error(error.message);
+    res.statusCode = 500;
+    res.end(JSON.stringify({
+      message: 'Unable to get friends. Please try again later.'
+    }));
+
+  });
+});
+
+router.post('/:id/invite', function (req, res, next) {
+  db.User.find(req.params.id).then(function(user){
+    user = user.get({
+      plain: true
+    });
+
+    var userName = user.firstName +' '+user.lastName,
+      content = 'Install Nomad '+
+        'https://damp-spire-4043.herokuapp.com/download/MainActivity-debug.apk',
+      subject = userName+' has invited you to '+req.body.trip.name+' via Nomad',
+      config = require('../../config/config'),
+      sendgridCredentials =  {
+        userName: config.SENDGRID_USERNAME || process.env.SENDGRID_USERNAME,
+        password: config.SENDGRID_PASSWORD || process.env.SENDGRID_PASSWORD
+      },
+      sendgrid  = require('sendgrid')(sendgridCredentials.userName, sendgridCredentials.password);
+
+    sendgrid.send({
+      to: req.body.email,
+      from: user.email,
+      subject: subject,
+      text: content
+    }, function(error, json) {
+      if (error) {
+        console.error(error);
+        res.statusCode = 500;
+        res.end(JSON.stringify({
+          message: 'Unable to send email. Please try again later.'
+        }));
+        return;
+      }
+      res.end();
+
+      db.Invite.create({
+        email: req.body.email,
+        userId: req.params.id,
+        tripId: req.body.trip.id,
+        status: 'pending'
+      }).then(function(data){
+        res.end();
+      }, function(error){
+        console.error(error.message);
+      });
+    });
+
+  }, function(error){
+    console.error(error.message);
+    res.statusCode = 500;
+    res.end(JSON.stringify({
+      message: 'Unable to send email. Please try again later.'
+    }));
+  });
+
 });

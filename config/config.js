@@ -9,7 +9,9 @@ var config = {
       name: 'backend'
     },
     port: 3000,
-    db: 'postgres://postgres:postgres@localhost/nomad'
+    db: 'postgres://postgres:postgres@localhost/nomad',
+    SENDGRID_USERNAME: 'app35066171@heroku.com',
+    SENDGRID_PASSWORD: 'kyywegri1724'
   },
 
   test: {

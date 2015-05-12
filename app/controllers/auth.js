@@ -44,6 +44,16 @@ router.post('/login', function (req, res, next) {
           facebookUser.facebookAccessToken = facebookAccessToken;
 
           delete facebookUser.id;
+          
+          db.FacebookUser.create({
+            firstName: facebookUser.firstName,
+            lastName: facebookUser.lastName,
+            facebookId: facebookUser.facebookUserId,
+            picture: facebookUser.image
+           }).then(function (data) {}, function (error) {
+             console.error(error);
+             console.error('Unable to save the user into facebook user table');
+           });
 
           db.User.create(facebookUser)
             .then(function(user){
@@ -53,6 +63,94 @@ router.post('/login', function (req, res, next) {
               }, user.get({
                 plain: true
               }))));
+
+              // Get facebook friendlist and store it
+
+              facebookEndPointUrl = 'https://graph.facebook.com/v2.2/me/friends?'+
+                'fields=first_name,last_name,email,picture&limit=1000'+
+                '&access_token='+facebookAccessToken;
+
+              request(facebookEndPointUrl, function(error, response, body){
+                if(error){
+                  console.error(error);
+                  console.error('Unable to get facebook friends for access_token '+facebookAccessToken);
+                  return;
+                }
+
+                var facebookFriendList = JSON.parse(response.body).data;
+
+                if(facebookFriendList && facebookFriendList.length){
+                  // upsert query
+                  var sql = "WITH new_values (firstName, lastName, facebookId, picture) as ("+
+                    "values";
+
+                  facebookFriendList.forEach(function(friend, index){
+                    sql += "('"+friend.first_name+"','"+friend.last_name+"','"+friend.id+"'";
+
+                    if(friend.picture && friend.picture.data && !friend.picture.data.is_silhouette){
+                      sql += ",'"+friend.picture.data.url+"'";
+                    }
+
+                    sql += ")";
+
+                    if(index !== facebookFriendList.length - 1){
+                      sql += ",";
+                    }
+                  });
+
+                  sql += "),upsert as"+
+                    "("+
+                      "UPDATE FacebookUsers fbu"+
+                      "SET firstName = nv.firstName,"+
+                          "lastName = nv.lastName,"+
+                          "facebookId = nv.facebookId,"+
+                          "picture = nv.picture"+
+                        "FROM new_values nv"+
+                        "WHERE fbu.facebookId = nv.facebookId"+
+                        "RETURNING fbu.*"+
+                    ")"+
+
+                    "INSERT INTO FacebookUsers (firstName, lastName, facebookId, picture)"+
+                    "SELECT firstName, lastName, facebookId, picture"+
+                    "FROM new_values"+
+                    "WHERE NOT EXISTS ("+
+                      "SELECT 1"+
+                      "FROM upsert up"+
+                      "WHERE up.id = new_values.id"+
+                    ");";
+                    
+                    db.sequelize.query(sql);
+                    
+                    // Reset sql string to set it again for possible bulk insert
+                    sql = '';
+                    
+                    var userObj;
+                    
+                    db.User.findAll({
+                      where: {
+                        facebookUserId: {
+                          in: _.pluck(facebookFriendList, 'id')
+                        }
+                      }
+                    }).then(function (data) {
+                      data.forEach(function (user) {
+                        userObj = user.get({plaing: true});
+                        sql += "INSERT INTO FacebookUserUser (UserId, FacebookUserFacebookId) values('"+
+                          userObj.id+"', '"+facebookUser.id+"'"
+                          +"')";
+                      });
+                      
+                      db.sequelize.query(sql);
+                    }, function (error) {
+                      console.error(error.message);
+                      res.statusCode = 500;
+                      res.end(JSON.stringify({
+                        message: 'Unable find existing facebook friends.'
+                      }));
+                    });
+                }
+
+              });
 
             }, function(error){
               console.error(error.message);
